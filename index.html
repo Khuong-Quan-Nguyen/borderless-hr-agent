@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Borderless HR Agent</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    header {
+      background: #1a1d2e;
+      border-bottom: 1px solid #2d3148;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    header h1 { font-size: 18px; font-weight: 600; }
+    header span { font-size: 13px; color: #64748b; margin-left: 4px; }
+
+    .status-dot {
+      width: 8px; height: 8px;
+      background: #22c55e;
+      border-radius: 50%;
+      margin-left: auto;
+      box-shadow: 0 0 6px #22c55e;
+    }
+
+    #chat-window {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .message {
+      max-width: 720px;
+      width: 100%;
+    }
+
+    .message.user { align-self: flex-end; }
+    .message.assistant { align-self: flex-start; }
+
+    .bubble {
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+
+    .user .bubble {
+      background: #6366f1;
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .assistant .bubble {
+      background: #1e2235;
+      border: 1px solid #2d3148;
+      border-bottom-left-radius: 4px;
+    }
+
+    .sender-label {
+      font-size: 11px;
+      color: #64748b;
+      margin-bottom: 4px;
+      padding: 0 4px;
+    }
+
+    .user .sender-label { text-align: right; }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 0 24px 12px;
+    }
+
+    .chip {
+      background: #1e2235;
+      border: 1px solid #2d3148;
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 12px;
+      cursor: pointer;
+      color: #94a3b8;
+      transition: all 0.15s;
+    }
+    .chip:hover { background: #2d3148; color: #e2e8f0; }
+
+    #input-area {
+      padding: 16px 24px;
+      background: #1a1d2e;
+      border-top: 1px solid #2d3148;
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    #user-input {
+      flex: 1;
+      background: #0f1117;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      padding: 12px 16px;
+      color: #e2e8f0;
+      font-size: 14px;
+      resize: none;
+      outline: none;
+      font-family: inherit;
+      max-height: 140px;
+      min-height: 48px;
+    }
+    #user-input:focus { border-color: #6366f1; }
+    #user-input::placeholder { color: #475569; }
+
+    #send-btn {
+      background: #6366f1;
+      border: none;
+      border-radius: 10px;
+      width: 48px;
+      height: 48px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+    #send-btn:hover { background: #4f46e5; }
+    #send-btn:disabled { background: #2d3148; cursor: not-allowed; }
+    #send-btn svg { color: white; }
+
+    .typing {
+      display: flex;
+      gap: 4px;
+      padding: 14px 16px;
+      background: #1e2235;
+      border: 1px solid #2d3148;
+      border-radius: 12px;
+      border-bottom-left-radius: 4px;
+      width: fit-content;
+    }
+    .typing span {
+      width: 6px; height: 6px;
+      background: #6366f1;
+      border-radius: 50%;
+      animation: bounce 1.2s infinite;
+    }
+    .typing span:nth-child(2) { animation-delay: 0.2s; }
+    .typing span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-6px); }
+    }
+
+    .api-warning {
+      background: #2d1f00;
+      border: 1px solid #78350f;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #fbbf24;
+      margin: 0 24px 12px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">B</div>
+  <div>
+    <h1>HR Agent <span>by Borderless AI</span></h1>
+  </div>
+  <div class="status-dot"></div>
+</header>
+
+<div id="chat-window">
+  <div class="message assistant">
+    <div class="sender-label">HR Agent</div>
+    <div class="bubble">👋 Hi! I'm your global HR assistant. I can help with:
+
+• Employment contracts &amp; termination rules by country
+• Global payroll &amp; compensation questions
+• EOR vs. entity setup decisions
+• Onboarding, offboarding &amp; compliance
+• Work permits &amp; visa eligibility
+
+What do you need help with today?</div>
+  </div>
+</div>
+
+<div class="chips">
+  <div class="chip" onclick="sendChip(this)">Hire in Canada 🇨🇦</div>
+  <div class="chip" onclick="sendChip(this)">Terminate employee in UK 🇬🇧</div>
+  <div class="chip" onclick="sendChip(this)">EOR vs entity setup</div>
+  <div class="chip" onclick="sendChip(this)">Payroll in Germany 🇩🇪</div>
+  <div class="chip" onclick="sendChip(this)">Work permit Brazil 🇧🇷</div>
+</div>
+
+<div id="input-area">
+  <textarea id="user-input" rows="1" placeholder="Ask an HR question..." onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+  <button id="send-btn" onclick="sendMessage()">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="22" y1="2" x2="11" y2="13"></line>
+      <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+    </svg>
+  </button>
+</div>
+
+<script>
+  const API_BASE = "http://localhost:8000";
+  const chatWindow = document.getElementById("chat-window");
+  const input = document.getElementById("user-input");
+  const sendBtn = document.getElementById("send-btn");
+  let history = [];
+
+  function autoResize(el) {
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 140) + "px";
+  }
+
+  function handleKey(e) {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  }
+
+  function sendChip(el) { input.value = el.textContent.replace(/[🇨🇦🇬🇧🇩🇪🇧🇷]/gu, "").trim(); sendMessage(); }
+
+  function appendMessage(role, text) {
+    const msg = document.createElement("div");
+    msg.className = `message ${role}`;
+    msg.innerHTML = `<div class="sender-label">${role === "user" ? "You" : "HR Agent"}</div><div class="bubble">${escHtml(text)}</div>`;
+    chatWindow.appendChild(msg);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+    return msg;
+  }
+
+  function escHtml(t) { return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  function showTyping() {
+    const wrap = document.createElement("div");
+    wrap.className = "message assistant";
+    wrap.id = "typing-indicator";
+    wrap.innerHTML = `<div class="sender-label">HR Agent</div><div class="typing"><span></span><span></span><span></span></div>`;
+    chatWindow.appendChild(wrap);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+  }
+
+  function hideTyping() {
+    const el = document.getElementById("typing-indicator");
+    if (el) el.remove();
+  }
+
+  async function sendMessage() {
+    const text = input.value.trim();
+    if (!text) return;
+
+    input.value = "";
+    input.style.height = "auto";
+    sendBtn.disabled = true;
+
+    appendMessage("user", text);
+    history.push({ role: "user", content: text });
+    showTyping();
+
+    try {
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: history })
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      hideTyping();
+      appendMessage("assistant", data.reply);
+      history.push({ role: "assistant", content: data.reply });
+    } catch (err) {
+      hideTyping();
+      appendMessage("assistant", `⚠️ Could not reach the backend. Make sure the FastAPI server is running on port 8000.\n\nRun: uvicorn main:app --reload`);
+    } finally {
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  }
+</script>
+</body>
+</html>

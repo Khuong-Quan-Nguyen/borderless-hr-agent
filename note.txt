@@ -1,0 +1,16 @@
+how to run code:
+
+Simple — just always open 2 terminals in VS Code:
+Terminal 1 (backend):
+powershell$env:ANTHROPIC_API_KEY = "your-key-here"
+uvicorn main:app --reload
+Terminal 2 (frontend):
+powershellpython -m http.server 3000
+Then open http://localhost:3000/index.html in your browser.
+
+To make it even easier, save your key so you don't have to type it every time. Create a file called .env in your project folder:
+ANTHROPIC_API_KEY=your-key-here
+Then in main.py add at the top:
+pythonfrom dotenv import load_dotenv
+load_dotenv()
+That way you just run uvicorn main:app --reload and the key loads automatically — no need to set it each time.
