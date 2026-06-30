@@ -1,16 +1,21 @@
 how to run code:
 
-Simple — just always open 2 terminals in VS Code:
-Terminal 1 (backend):
-powershell$env:ANTHROPIC_API_KEY = "your-key-here"
+1. Open 2 terminals in VS Code (+ button in terminal panel)
+Terminal 1:
 uvicorn main:app --reload
-Terminal 2 (frontend):
-powershellpython -m http.server 3000
-Then open http://localhost:3000/index.html in your browser.
+Terminal 2:
+python -m http.server 3000
 
-To make it even easier, save your key so you don't have to type it every time. Create a file called .env in your project folder:
-ANTHROPIC_API_KEY=your-key-here
-Then in main.py add at the top:
-pythonfrom dotenv import load_dotenv
-load_dotenv()
-That way you just run uvicorn main:app --reload and the key loads automatically — no need to set it each time.
+2. Open your browser → http://localhost:3000/index.html
+
+----------------------------
+What it is: A chatbot that answers global HR questions (hiring, payroll, termination rules across countries) — basically a mini clone of what Borderless AI sells.
+How it works:
+
+Frontend (index.html) — a chat UI in your browser. You type a question, it sends to your backend.
+Backend (main.py, FastAPI) — receives your message, forwards it to Claude (Anthropic's AI) with a system prompt telling it to act as an HR/global employment expert, and sends the AI's reply 
+back.
+Claude API — actually generates the answer using its knowledge of employment law, payroll, EOR concepts, etc.
+
+Flow: You type in browser → frontend sends to localhost:8000 → backend calls Claude API → Claude answers → backend sends it back → shows up in chat.
+That's it — two simple pieces talking to each other, with Claude doing the thinking in the middle.
