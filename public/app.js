@@ -56,6 +56,7 @@ async function streamInto(url, body, el, { onDone } = {}) {
     }
   }
   cancelAnimationFrame(frame);
+  if (!text.trim()) throw new Error("the server returned an empty response");
   renderMarkdown(el, text);
   onDone?.(text, true);
   return text;
@@ -382,7 +383,11 @@ $("#p-brief").addEventListener("click", async () => {
 async function boot() {
   fetch("/api/health")
     .then((r) => (r.ok ? r.json() : Promise.reject()))
-    .then(() => { $("#status").className = "status ok"; $("#status-text").textContent = "Agent online"; })
+    .then((h) => {
+      const ready = h.api_key_configured !== false;
+      $("#status").className = `status ${ready ? "ok" : "down"}`;
+      $("#status-text").textContent = ready ? "Agent online" : "API key not configured";
+    })
     .catch(() => { $("#status").className = "status down"; $("#status-text").textContent = "Backend offline"; });
 
   try {

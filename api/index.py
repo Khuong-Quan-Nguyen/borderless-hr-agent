@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 from typing import Literal
@@ -80,7 +81,15 @@ class BriefRequest(BaseModel):
     role: str = Field(default="", max_length=120)
 
 
+def api_key_configured() -> bool:
+    return bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"))
+
+
 async def stream_claude(system: str, messages: list[dict], effort: str):
+    if not api_key_configured():
+        yield ("⚠️ The server has no Anthropic API key. Set `ANTHROPIC_API_KEY` in your environment "
+               "(on Vercel: Project → Settings → Environment Variables), then redeploy.")
+        return
     try:
         async with client.beta.messages.stream(
             model=MODEL,
@@ -106,6 +115,9 @@ async def stream_claude(system: str, messages: list[dict], effort: str):
         yield f"⚠️ The AI service returned an error ({e.status_code}). Please try again."
     except anthropic.APIConnectionError:
         yield "⚠️ Could not reach the AI service. Please try again."
+    except Exception:
+        logging.exception("Unexpected error while streaming from Claude")
+        yield "⚠️ Something went wrong on the server. Please try again."
 
 
 def text_stream(gen) -> StreamingResponse:
@@ -156,7 +168,7 @@ def countries():
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "model": MODEL}
+    return {"status": "ok", "model": MODEL, "api_key_configured": api_key_configured()}
 
 
 # Local development: serve the frontend from the same origin. On Vercel, public/ is served by the CDN.
