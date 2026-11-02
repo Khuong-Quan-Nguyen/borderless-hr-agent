@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Borderless HR Agent</title>
+  <meta name="description" content="An AI HR agent for global teams: ask employment-law questions, draft compliant contracts, and compare the true cost of hiring across countries." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%233d5afe'/><circle cx='16' cy='16' r='8' fill='none' stroke='white' stroke-width='2'/><path d='M8 16h16M16 8c3 3 3 13 0 16M16 8c-3 3-3 13 0 16' fill='none' stroke='white' stroke-width='1.6'/></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<nav class="nav">
+  <div class="container nav-inner">
+    <a href="#" class="brand">
+      <span class="brand-mark">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>
+      </span>
+      Borderless HR Agent
+    </a>
+    <div class="nav-links">
+      <a href="#agent" data-goto="agent">HR Agent</a>
+      <a href="#contract" data-goto="contract">Contracts</a>
+      <a href="#planner" data-goto="planner">Hiring Planner</a>
+      <a href="#how">How it works</a>
+    </div>
+    <a href="#planner" data-goto="planner" class="btn btn-primary btn-sm nav-cta">Compare countries</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="hero-grid"></div>
+  <div class="container">
+    <a href="#planner" data-goto="planner" class="pill"><b>New</b> Global Hiring Planner — compare true hiring cost in seconds →</a>
+    <h1>Hire anyone, anywhere.<br /><span class="grad">Your AI HR agent knows the rules.</span></h1>
+    <p class="lede">Ask about employment law in any country, draft compliant contracts in minutes, and see what a hire really costs before you make the offer.</p>
+    <div class="hero-ctas">
+      <a href="#agent" data-goto="agent" class="btn btn-brand">Ask the HR Agent</a>
+      <a href="#planner" data-goto="planner" class="btn btn-ghost">Plan a global hire</a>
+    </div>
+    <div class="trust">
+      <div><strong id="stat-countries">24</strong>countries modeled</div>
+      <div><strong>3</strong>AI workflows</div>
+      <div><strong>&lt;1 min</strong>to a hiring brief</div>
+      <div><strong>Free</strong>no sign-up</div>
+    </div>
+  </div>
+</header>
+
+<main class="workspace" id="app">
+  <div class="container">
+    <div class="app">
+      <div class="app-bar">
+        <div class="dots"><i></i><i></i><i></i></div>
+        <div class="tabs" role="tablist">
+          <button class="tab" role="tab" data-tab="agent" aria-selected="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            HR Agent
+          </button>
+          <button class="tab" role="tab" data-tab="contract" aria-selected="false">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>
+            Contracts
+          </button>
+          <button class="tab" role="tab" data-tab="planner" aria-selected="false">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>
+            Hiring Planner <span class="new">New</span>
+          </button>
+        </div>
+        <div class="status" id="status"><span class="led"></span><span id="status-text">Connecting…</span></div>
+      </div>
+
+      <!-- HR Agent -->
+      <section class="panel active" id="panel-agent" role="tabpanel">
+        <div class="chat">
+          <div class="chat-scroll" id="chat-scroll">
+            <div class="welcome" id="welcome">
+              <div class="orb"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg></div>
+              <h2>What can I help you with?</h2>
+              <p>Employment law, payroll, benefits, visas and EOR questions — for any country.</p>
+              <div class="suggestions">
+                <button class="suggestion" data-q="How do I hire a full-time employee in Germany without setting up an entity?"><b>🇩🇪 Hire in Germany</b><span>Without setting up a local entity</span></button>
+                <button class="suggestion" data-q="What are the notice and severance rules for terminating an employee in the UK after 3 years?"><b>🇬🇧 Terminate in the UK</b><span>Notice and severance after 3 years</span></button>
+                <button class="suggestion" data-q="Compare EOR vs. setting up an entity for a 5-person team in Brazil."><b>🇧🇷 EOR vs. entity</b><span>For a 5-person team in Brazil</span></button>
+                <button class="suggestion" data-q="Can I keep paying a developer in Vietnam as a contractor, or is that misclassification risk?"><b>🇻🇳 Contractor or employee?</b><span>Misclassification risk in Vietnam</span></button>
+              </div>
+            </div>
+            <div id="messages"></div>
+          </div>
+          <div class="composer">
+            <div class="composer-box">
+              <textarea id="chat-input" rows="1" placeholder="Ask about hiring, payroll, terminations, visas…"></textarea>
+              <button class="send" id="chat-send" aria-label="Send">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              </button>
+            </div>
+            <div class="hint"><span>AI-generated guidance, not legal advice. Verify with local counsel.</span><button class="link-btn" id="chat-reset">New chat</button></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Contracts -->
+      <section class="panel" id="panel-contract" role="tabpanel">
+        <div class="split">
+          <form class="side" id="contract-form">
+            <h3>Draft a contract</h3>
+            <p class="sub">Generates a jurisdiction-aware first draft with clauses flagged for review.</p>
+            <div class="field">
+              <label>Worker type</label>
+              <div class="seg" id="worker-type">
+                <button type="button" data-v="employee" aria-pressed="true">Employee</button>
+                <button type="button" data-v="contractor" aria-pressed="false">Contractor</button>
+              </div>
+            </div>
+            <div class="field"><label for="c-country">Country</label><select id="c-country" required></select></div>
+            <div class="field"><label for="c-role">Job title</label><input class="input" id="c-role" placeholder="Senior Backend Engineer" required /></div>
+            <div class="row2">
+              <div class="field"><label for="c-salary">Salary</label><input class="input" id="c-salary" placeholder="€85,000 / year" /></div>
+              <div class="field"><label for="c-start">Start date</label><input class="input" id="c-start" type="date" /></div>
+            </div>
+            <div class="field"><label for="c-company">Company</label><input class="input" id="c-company" placeholder="Acme Inc." /></div>
+            <div class="field"><label for="c-notes">Special terms</label><textarea id="c-notes" placeholder="Remote, stock options, 4-day week…"></textarea></div>
+            <button class="btn btn-brand" type="submit" id="contract-go">Generate draft</button>
+          </form>
+          <div class="main">
+            <div class="toolbar">
+              <div class="title" id="contract-title">Draft preview</div>
+              <button class="btn btn-ghost btn-sm" id="contract-copy" disabled>Copy</button>
+              <button class="btn btn-ghost btn-sm" id="contract-download" disabled>Download .md</button>
+            </div>
+            <div class="paper">
+              <div class="md" id="contract-out">
+                <div class="empty"><div>
+                  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>
+                  <p>Fill in the details and your draft will appear here.</p>
+                </div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Hiring Planner -->
+      <section class="panel" id="panel-planner" role="tabpanel">
+        <div class="split">
+          <div class="side">
+            <h3>Global Hiring Planner</h3>
+            <p class="sub">Compare the true annual cost and compliance profile of a hire in up to 4 countries.</p>
+            <div class="field"><label for="p-role">Role</label><input class="input" id="p-role" placeholder="Senior Backend Engineer" /></div>
+            <div class="field">
+              <label for="p-salary">Base salary (USD / year)</label>
+              <div class="money"><span>$</span><input class="input" id="p-salary" type="number" min="1000" step="1000" value="90000" /></div>
+              <input class="range" id="p-salary-range" type="range" min="10000" max="300000" step="1000" value="90000" aria-label="Salary slider" />
+            </div>
+            <div class="field">
+              <label for="p-fee">EOR fee (USD / month)</label>
+              <div class="money"><span>$</span><input class="input" id="p-fee" type="number" min="0" step="10" value="500" /></div>
+            </div>
+            <div class="field country-picker">
+              <label for="p-search">Countries <span id="p-count" style="text-transform:none;font-weight:400;color:var(--ink-3)"></span></label>
+              <div class="chips" id="p-chips"></div>
+              <input class="input" id="p-search" placeholder="Add a country…" autocomplete="off" />
+              <div class="dropdown" id="p-dropdown"></div>
+            </div>
+            <p class="disclaimer">Indicative estimates using simplified employer-contribution rates and mandatory extra pay. Real costs vary with salary caps, region and collective agreements.</p>
+          </div>
+          <div class="main">
+            <div class="toolbar">
+              <div class="title">Total annual cost per hire</div>
+              <button class="btn btn-ghost btn-sm" id="p-share">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+                Copy share link
+              </button>
+              <button class="btn btn-brand btn-sm" id="p-brief">✦ Generate AI hiring brief</button>
+            </div>
+            <div class="legend">
+              <span><i style="background:var(--seg-1)"></i>Gross pay (incl. mandatory extra months)</span>
+              <span><i style="background:var(--seg-2)"></i>Employer contributions</span>
+              <span><i style="background:var(--seg-3)"></i>EOR fees</span>
+            </div>
+            <div class="compare" id="p-compare"></div>
+            <div class="brief" id="p-brief-box" hidden>
+              <div class="brief-head">✦ AI hiring brief</div>
+              <div class="md" id="p-brief-out"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<section class="block" id="how">
+  <div class="container">
+    <div class="eyebrow">How it works</div>
+    <h2>From "can we hire there?" to a signed offer.</h2>
+    <p class="intro">One agent covers the questions HR, finance and founders ask every time they hire across a border.</p>
+    <div class="steps">
+      <div class="step"><h3>Plan the hire</h3><p>Compare employer cost, paid leave, notice and misclassification risk across countries — then share the link with finance.</p></div>
+      <div class="step"><h3>Ask anything</h3><p>The HR Agent answers employment-law, payroll, benefits and visa questions with country-specific detail and flags what needs counsel.</p></div>
+      <div class="step"><h3>Draft the contract</h3><p>Generate a first draft with local clauses — probation, leave, notice, IP — and review markers for your lawyer.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="block">
+  <div class="container">
+    <div class="eyebrow">Built for global teams</div>
+    <h2>Everything you need before you hire abroad.</h2>
+    <div class="features">
+      <div class="feature">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6z"/></svg></div>
+        <h3>Compliance-first answers</h3><p>Country-specific guidance on contracts, terminations and leave, with clear flags when you need local counsel.</p>
+      </div>
+      <div class="feature">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <h3>True cost, not just salary</h3><p>Employer contributions, 13th-month pay and EOR fees in one number, so offers don't surprise finance later.</p>
+      </div>
+      <div class="feature">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M4 9h16M9 20V9"/></svg></div>
+        <h3>Shareable decisions</h3><p>Every plan is a link. Send it to your CFO or hiring manager and they see exactly what you see.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="container">
+  <div class="cta-band">
+    <h2>Where is your next hire?</h2>
+    <p>Compare countries in seconds and get an AI-written hiring brief — free.</p>
+    <a href="#planner" data-goto="planner" class="btn btn-primary">Open the Hiring Planner</a>
+  </div>
+</div>
+
+<footer>
+  <div class="container">
+    <span>Independent demo project inspired by Borderless AI's HR agent. Not affiliated with or endorsed by Borderless AI.</span>
+    <span>AI output is not legal or tax advice.</span>
+  </div>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,88 +1,97 @@
 # 🌐 Borderless HR Agent
 
-An AI-powered global HR assistant built with FastAPI + Claude API. Inspired by Borderless AI's HRGPT/Alberni product — helps HR teams navigate global employment law, EOR decisions, payroll compliance, and more.
+An AI HR agent for global teams, built with FastAPI and Claude. It's inspired by [Borderless AI](https://www.hireborderless.com), an AI-native Employer of Record whose agent **Alberni** handles compliance questions, contract drafting and onboarding, and whose free **HRGPT** search engine pulls new users in at the top of the funnel.
+
+> Independent portfolio project. Not affiliated with or endorsed by Borderless AI.
 
 ## Features
 
-- 💬 Conversational HR assistant with multi-turn memory
-- 🌍 Global employment knowledge (contracts, terminations, notice periods)
-- 📋 EOR vs. entity setup guidance
-- 💼 Payroll, benefits, and compliance queries
-- ⚡ Clean chat UI with suggested prompts
+| | What it does |
+|---|---|
+| 💬 **HR Agent** | Multi-turn chat for employment law, payroll, benefits, visas, contractor misclassification and EOR-vs-entity questions. Responses stream in and are rendered as Markdown. |
+| 📄 **Contract drafting** | Produces a first-draft employment or contractor agreement for a chosen country, including local clauses (probation, leave, notice, IP), `[REVIEW]` markers for counsel and placeholders for missing details. You can copy it or download it as Markdown. |
+| 🌍 **Global Hiring Planner** *(new feature)* | Compares the **true annual cost** of a hire in up to 4 countries: gross pay including mandatory extra months, employer contributions and EOR fees. Each country also shows paid leave, notice, probation and contractor-misclassification risk. It can generate an **AI hiring brief** with a recommendation, and every plan is a **shareable link**. |
 
-## Tech Stack
+### Why the Hiring Planner?
+
+Borderless already grows through free tools: HRGPT, and a free agent the CEO compared to Zillow's Zestimate. The Planner applies the same idea to the moment a buyer is choosing **where** to hire. That's the point where an EOR is most relevant.
+
+- **Captures high-intent buyers.** Someone comparing employer costs in Germany and Brazil is about to make a hire.
+- **Spreads by sharing.** Plans are links, so HR sends them to finance and the hiring manager, and new stakeholders see the product.
+- **Hands off to the product.** The AI brief ends with next steps (EOR vs. contractor vs. entity), which leads naturally into onboarding.
+
+## Tech stack
 
 | Layer | Tech |
-|-------|------|
-| Backend | FastAPI, Python |
-| AI | Anthropic Claude (claude-sonnet-4-6) |
-| Frontend | Vanilla HTML/CSS/JS |
+|---|---|
+| Backend | FastAPI (Python), streaming responses |
+| AI | Anthropic Claude (`claude-opus-5-5` by default, overridable with `CLAUDE_MODEL`) |
+| Frontend | Vanilla HTML/CSS/JS, marked + DOMPurify for Markdown |
+| Hosting | Vercel (static `public/` + Python function `api/index.py`) |
 
-## Quick Start
+## Project structure
 
-### 1. Clone & install
+```
+├── api/
+│   ├── index.py        # FastAPI app: /api/chat, /api/contract, /api/brief, /api/countries, /api/health
+│   └── countries.py    # Indicative cost/compliance data for 24 countries + cost formula
+├── public/
+│   ├── index.html      # Landing page + app (HR Agent · Contracts · Hiring Planner)
+│   ├── styles.css
+│   └── app.js
+├── requirements.txt
+└── vercel.json
+```
+
+## Run locally
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/borderless-hr-agent.git
-cd borderless-hr-agent/backend
+python -m venv .venv
+.venv\Scripts\activate            # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Set API key
+Create `.env` in the project root:
 
-```bash
-export ANTHROPIC_API_KEY=your_key_here
+```
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-### 3. Run backend
+Start the server. It serves both the API and the frontend:
 
 ```bash
-uvicorn main:app --reload
-# API available at http://localhost:8000
+uvicorn api.index:app --reload
 ```
 
-### 4. Open frontend
+Then open http://localhost:8000.
 
-Open `frontend/index.html` in your browser (or serve with `python -m http.server`).
+## Deploy to Vercel
+
+1. Push the repo to GitHub and import it at [vercel.com/new](https://vercel.com/new). Use the defaults; no build command is needed.
+2. Under **Settings → Environment Variables**, add `ANTHROPIC_API_KEY`. You can also set `CLAUDE_MODEL` to change the model.
+3. Deploy. `public/` is served from Vercel's CDN, and every `/api/*` request goes to the FastAPI function (see `vercel.json`).
+
+Or use the CLI: `npm i -g vercel && vercel --prod`.
+
+> ⚠️ A public deployment spends your Anthropic credits whenever anyone uses it. Before sharing the URL widely, consider adding a spend limit in the Anthropic Console, or Vercel's firewall rate limiting.
 
 ## API
 
-### `POST /chat`
+All AI endpoints stream back `text/plain` Markdown.
 
-```json
-{
-  "messages": [
-    { "role": "user", "content": "What are the notice period rules for terminating an employee in Canada?" }
-  ]
-}
-```
+| Endpoint | Body |
+|---|---|
+| `POST /api/chat` | `{"messages": [{"role": "user", "content": "..."}]}` |
+| `POST /api/contract` | `{"country": "Portugal", "worker_type": "employee", "role": "Designer", "salary": "...", "start_date": "...", "company": "...", "notes": "..."}` |
+| `POST /api/brief` | `{"countries": ["GB", "DE"], "salary_usd": 90000, "eor_fee": 500, "role": "..."}` |
+| `GET /api/countries` | Planner dataset |
+| `GET /api/health` | `{"status": "ok", "model": "..."}` |
 
-**Response:**
-```json
-{
-  "reply": "In Canada, notice periods vary by province and employment duration..."
-}
-```
+## Disclaimer
 
-## Example Queries
-
-- *"How do I hire a full-time employee in Germany without setting up an entity?"*
-- *"What are the termination notice requirements in the UK?"*
-- *"Compare EOR vs. PEO for a 5-person team in Brazil."*
-- *"What statutory benefits are required for employees in Singapore?"*
-
-## Project Structure
-
-```
-borderless-hr-agent/
-├── backend/
-│   ├── main.py          # FastAPI app + Claude integration
-│   └── requirements.txt
-└── frontend/
-    └── index.html       # Chat UI
-```
+The country figures in `api/countries.py` are simplified planning estimates. Real costs depend on salary caps, region, residency and collective agreements. Nothing this app produces is legal or tax advice.
 
 ## Author
 
-**Quan Nguyen** — AI/ML Engineer  
+**Quan Nguyen**, AI/ML Engineer
 [LinkedIn](https://linkedin.com/in/quan-nguyen-8a13a9328/) | [GitHub](https://github.com/Khuong-Quan-Nguyen)
