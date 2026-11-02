@@ -43,27 +43,77 @@ Borderless already grows through free tools: HRGPT, and a free agent the CEO com
 └── vercel.json
 ```
 
-## Run locally
+## Run the demo locally
+
+### Prerequisites
+
+- **Python 3.10+.** Check with `python --version`.
+- **An Anthropic API key.** Create one at [console.anthropic.com](https://console.anthropic.com/settings/keys).
+- **Git.**
+
+### 1. Clone the repo
 
 ```bash
+git clone https://github.com/Khuong-Quan-Nguyen/borderless-hr-agent.git
+cd borderless-hr-agent
+```
+
+### 2. Create a virtual environment and install dependencies
+
+**Windows (PowerShell):**
+```powershell
 python -m venv .venv
-.venv\Scripts\activate            # macOS/Linux: source .venv/bin/activate
+.venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Create `.env` in the project root:
+**macOS / Linux:**
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 3. Add your API key
+
+Create a file named `.env` in the project root (next to `requirements.txt`):
 
 ```
-ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_API_KEY=sk-ant-your-key-here
 ```
 
-Start the server. It serves both the API and the frontend:
+`.env` is git-ignored, so your key is never committed.
+
+### 4. Start the app
 
 ```bash
 uvicorn api.index:app --reload
 ```
 
-Then open http://localhost:8000.
+One server runs both the API and the website. Open **http://localhost:8000**. When the app is ready, the green **Agent online** dot shows in the top-right of the workspace.
+
+Stop the server with `Ctrl + C`. Next time, you only need to run step 2's `activate` line and then step 4.
+
+### 5. Try the demo
+
+1. **HR Agent tab.** Click a suggestion card, such as *Hire in Germany*, or ask your own question, for example *"What's the notice period for firing someone in France after 2 years?"* Follow-up questions keep the conversation context.
+2. **Contracts tab.** Choose *Employee*, pick a country (for example Portugal), enter a job title and salary, then click **Generate draft**. Clauses that need a lawyer's check are marked **[REVIEW]**. Use **Copy** or **Download .md** to export the draft.
+3. **Hiring Planner tab.** This is the new feature.
+   - Set a role and salary, then add or remove countries (up to 4). Costs update instantly, and the cheapest country is tagged **Lowest cost**.
+   - Click **✦ Generate AI hiring brief** for a written recommendation.
+   - Click **Copy share link**, then open the link in a new tab. The same comparison loads.
+
+AI responses take a few seconds to start, because the model reasons before it answers. Then the text streams in.
+
+### Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| Status dot says **Backend offline**, or the page doesn't load | Make sure `uvicorn` is still running in your terminal and you opened `http://localhost:8000`, not the HTML file directly. |
+| Answers say the **API key is missing or invalid** | Check that `.env` is in the project root and contains `ANTHROPIC_API_KEY=...`, then restart `uvicorn`. |
+| `uvicorn: command not found` | The virtual environment isn't active. Run the `activate` line from step 2. |
+| Port 8000 is already in use | Run `uvicorn api.index:app --reload --port 8001` and open http://localhost:8001. |
+| `.venv\Scripts\activate` is blocked on Windows | Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once in PowerShell, then try again. |
 
 ## Deploy to Vercel
 
