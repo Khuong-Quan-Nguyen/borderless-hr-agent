@@ -246,6 +246,8 @@ def error_message(e: Exception) -> str:
         return "⚠️ Too many requests right now. Please try again in a minute."
     if isinstance(e, anthropic.BadRequestError):
         logging.error("Claude API rejected the request: %s", e.message)
+        if "credit balance" in e.message:
+            return "⚠️ The live demo is out of AI credits right now. Please try again a little later."
         return f"⚠️ The AI service rejected the request: {e.message[:300]}"
     if isinstance(e, anthropic.APIStatusError):
         return f"⚠️ The AI service returned an error ({e.status_code}). Please try again."
