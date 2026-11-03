@@ -33,6 +33,13 @@ Borderless already grows through free tools: HRGPT, and a free agent the CEO com
 
 All three tools use `strict: true`, so their inputs always match the schema.
 
+### Connected workflows and demo safeguards
+
+- Every Planner country card has **Draft contract**, which opens the Contracts tab already filled in, and **⚡ Hire here**, which runs the one-prompt hire agent for that country.
+- The HR Agent chat gets the same country data as the Planner, so its figures match the rest of the app.
+- Chat and hire runs can be stopped mid-stream. Chat answers, contracts and checklists have copy buttons, and a finished hire can be shared as a link.
+- AI endpoints have a per-IP usage budget (`RATE_BUDGET`, default 40 units per 10 minutes) so a public demo link can't drain the API key.
+
 ## Tech stack
 
 | Layer | Tech |

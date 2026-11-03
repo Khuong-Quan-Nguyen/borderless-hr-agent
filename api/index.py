@@ -2,10 +2,12 @@ import json
 import logging
 import os
 import sys
+import time
+from collections import defaultdict, deque
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -35,6 +37,18 @@ CHAT_PROMPT = BASE_PROMPT + """
 You cover global employment law (contracts, terminations, notice periods), payroll and
 compensation, onboarding/offboarding, benefits, time off, work permits and visas, contractor
 misclassification, and EOR vs. entity trade-offs."""
+
+COUNTRY_FACTS = "\n".join(
+    f"- {c['name']} ({c['currency']}): employer contributions ~{c['employer_rate']:.1%}, mandatory extra pay "
+    f"{c['extra_months']} months, min. paid leave {c['pto_days']} days, notice: {c['notice']}, probation: {c['probation']}, "
+    f"contractor misclassification risk: {c['misclass_risk']}; {c['notes']}"
+    for c in COUNTRIES)
+CHAT_PROMPT += f"""
+
+The platform's indicative country data is below. When a question touches these countries, use these figures so
+your answers match the Hiring Planner, and mention that the user can compare countries in the Hiring Planner tab or
+run the full workflow in the One-prompt hire tab when they are deciding where to hire.
+{COUNTRY_FACTS}"""
 
 CONTRACT_PROMPT = BASE_PROMPT + """
 
@@ -142,6 +156,25 @@ HIRE_TOOLS = [
 
 MAX_AGENT_TURNS = 8
 
+# Per-IP budget for AI calls so a public demo link can't drain the API key. In-memory, so on serverless
+# it applies per warm instance - a speed bump, not a hard quota.
+RATE_WINDOW_S = 600
+RATE_BUDGET = int(os.getenv("RATE_BUDGET", "40"))
+_usage: dict[str, deque] = defaultdict(deque)
+
+
+def rate_limit(cost: int):
+    def check(request: Request):
+        ip = (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "?")).split(",")[0].strip()
+        now = time.monotonic()
+        hits = _usage[ip]
+        while hits and now - hits[0][0] > RATE_WINDOW_S:
+            hits.popleft()
+        if sum(c for _, c in hits) + cost > RATE_BUDGET:
+            raise HTTPException(429, "You've hit the demo's usage limit. Please try again in a few minutes.")
+        hits.append((now, cost))
+    return Depends(check)
+
 
 class Message(BaseModel):
     role: Literal["user", "assistant"]
@@ -224,7 +257,7 @@ def text_stream(gen) -> StreamingResponse:
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
-@app.post("/api/chat")
+@app.post("/api/chat", dependencies=[rate_limit(1)])
 async def chat(req: ChatRequest):
     if req.messages[0].role != "user":
         raise HTTPException(400, "Conversation must start with a user message")
@@ -232,14 +265,14 @@ async def chat(req: ChatRequest):
     return text_stream(stream_claude(CHAT_PROMPT, messages, effort="low"))
 
 
-@app.post("/api/contract")
+@app.post("/api/contract", dependencies=[rate_limit(3)])
 async def contract(req: ContractRequest):
     details = "\n".join(f"- {k.replace('_', ' ').title()}: {v}" for k, v in req.model_dump().items() if v)
     prompt = f"Draft the agreement using these details:\n{details}"
     return text_stream(stream_claude(CONTRACT_PROMPT, [{"role": "user", "content": prompt}], effort="medium"))
 
 
-@app.post("/api/brief")
+@app.post("/api/brief", dependencies=[rate_limit(2)])
 async def brief(req: BriefRequest):
     unknown = [c for c in req.countries if c not in BY_CODE]
     if unknown:
@@ -365,7 +398,7 @@ async def run_hire(prompt: str):
         yield ndjson(t="error", msg=error_message(e))
 
 
-@app.post("/api/hire")
+@app.post("/api/hire", dependencies=[rate_limit(6)])
 async def hire(req: HireRequest):
     return StreamingResponse(run_hire(req.prompt), media_type="application/x-ndjson",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

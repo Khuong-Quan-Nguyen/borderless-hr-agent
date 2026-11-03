@@ -32,13 +32,15 @@ const flagImg = (c, h) => `<img class="flag" src="https://flagcdn.com/h40/${c.co
 const usd = (n) => "$" + Math.round(n).toLocaleString("en-US");
 
 // POST JSON and stream the plain-text response, re-rendering as chunks arrive.
-async function streamInto(url, body, el, { onDone } = {}) {
+// If `signal` aborts, resolves with the partial text instead of throwing.
+async function streamInto(url, body, el, { onDone, signal } = {}) {
   let text = "";
   let frame = 0;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal,
   });
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
@@ -47,13 +49,18 @@ async function streamInto(url, body, el, { onDone } = {}) {
   }
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    text += decoder.decode(value, { stream: true });
-    if (!frame) {
-      frame = requestAnimationFrame(() => { frame = 0; renderMarkdown(el, text); onDone?.(text, false); });
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+      if (!frame) {
+        frame = requestAnimationFrame(() => { frame = 0; renderMarkdown(el, text); onDone?.(text, false); });
+      }
     }
+  } catch (err) {
+    if (err.name !== "AbortError") throw err;
+    text += "\n\n_(Stopped.)_";
   }
   cancelAnimationFrame(frame);
   if (!text.trim()) throw new Error("the server returned an empty response");
@@ -82,7 +89,9 @@ $$("[data-goto]").forEach((a) => a.addEventListener("click", (e) => {
 }));
 
 // ---------- HR Agent chat ----------
-const chat = { history: [], busy: false };
+const chat = { history: [], busy: false, ctrl: null };
+const SEND_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>`;
+const STOP_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>`;
 const chatInput = $("#chat-input");
 const chatSend = $("#chat-send");
 const chatScroll = $("#chat-scroll");
@@ -101,7 +110,9 @@ async function sendChat(text) {
   text = text.trim();
   if (!text || chat.busy) return;
   chat.busy = true;
-  chatSend.disabled = true;
+  chat.ctrl = new AbortController();
+  chatSend.innerHTML = STOP_ICON;
+  chatSend.setAttribute("aria-label", "Stop");
   $("#welcome").hidden = true;
 
   const userBody = addMessage("user");
@@ -116,20 +127,26 @@ async function sendChat(text) {
 
   try {
     const reply = await streamInto("/api/chat", { messages: chat.history }, md, {
+      signal: chat.ctrl.signal,
       onDone: () => {
         if (!md.isConnected) botBody.replaceChildren(md);
         scrollChat();
       },
     });
     if (!md.isConnected) botBody.replaceChildren(md);
-    if (reply.trim()) chat.history.push({ role: "assistant", content: reply });
-    else chat.history.pop();
+    chat.history.push({ role: "assistant", content: reply });
+    const copy = document.createElement("button");
+    copy.className = "link-btn msg-copy";
+    copy.textContent = "Copy answer";
+    copy.addEventListener("click", async () => { await navigator.clipboard.writeText(reply); toast("Answer copied"); });
+    botBody.appendChild(copy);
   } catch (err) {
     chat.history.pop();
     botBody.innerHTML = `<div class="md"><p>⚠️ Couldn't reach the HR Agent (${escapeHtml(err.message)}). Check that the backend is running and <code>ANTHROPIC_API_KEY</code> is set.</p></div>`;
   } finally {
     chat.busy = false;
-    chatSend.disabled = false;
+    chatSend.innerHTML = SEND_ICON;
+    chatSend.setAttribute("aria-label", "Send");
     chatInput.focus();
   }
 }
@@ -150,6 +167,7 @@ chatInput.addEventListener("keydown", (e) => {
   }
 });
 chatSend.addEventListener("click", () => {
+  if (chat.busy) return chat.ctrl.abort();
   const v = chatInput.value;
   chatInput.value = "";
   autoGrow();
@@ -281,6 +299,10 @@ function renderCompare() {
           <div><dt>Contractor risk</dt><dd><span class="risk ${c.misclass_risk}">${c.misclass_risk}</span></dd></div>
         </dl>
         <div class="note">${c.notes}</div>
+        <div class="card-actions">
+          <button type="button" class="btn btn-ghost btn-sm" data-contract="${c.code}">Draft contract</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-hire="${c.code}">⚡ Hire here</button>
+        </div>
       </article>`;
   }).join("");
 }
@@ -345,11 +367,28 @@ $("#p-salary-range").addEventListener("input", (e) => {
 $("#p-fee").addEventListener("input", (e) => { planner.fee = Math.max(0, +e.target.value || 0); updatePlanner(); });
 $("#p-role").addEventListener("input", (e) => { planner.role = e.target.value.trim(); updatePlanner(); });
 
+$("#p-compare").addEventListener("click", (e) => {
+  const contractCode = e.target.closest("[data-contract]")?.dataset.contract;
+  const hireCode = e.target.closest("[data-hire]")?.dataset.hire;
+  if (contractCode) {
+    $("#c-country").value = contractCode;
+    if (planner.role) $("#c-role").value = planner.role;
+    $("#c-salary").value = `${usd(planner.salary)} / year`;
+    selectTab("contract", true);
+    history.replaceState(null, "", "#contract");
+    $("#c-role").value ? $("#contract-go").focus() : $("#c-role").focus();
+  } else if (hireCode) {
+    const q = `Hire a ${planner.role || "new team member"} in ${BY_CODE[hireCode].name} on a base salary of about ${usd(planner.salary)} a year (EOR fee ${usd(planner.fee)}/month).`;
+    $("#hire-input").value = q;
+    selectTab("hire", true);
+    history.replaceState(null, "", "#hire");
+    runHire(q);
+  }
+});
+
 $("#p-share").addEventListener("click", async () => {
-  const url = location.origin + location.pathname + plannerHash();
   history.replaceState(null, "", plannerHash());
-  try { await navigator.clipboard.writeText(url); toast("Share link copied"); }
-  catch { prompt("Copy this link:", url); }
+  copyLink(location.origin + location.pathname + plannerHash());
 });
 
 $("#p-brief").addEventListener("click", async () => {
@@ -373,7 +412,7 @@ $("#p-brief").addEventListener("click", async () => {
 });
 
 // ---------- One-prompt hire ----------
-const hire = { busy: false, contract: "", started: 0, timer: 0 };
+const hire = { busy: false, contract: "", started: 0, timer: 0, ctrl: null, prompt: "" };
 const STEPS = {
   compare_countries: { running: "Comparing countries", done: "Countries compared" },
   draft_contract: { running: "Drafting the contract", done: "Contract drafted" },
@@ -382,11 +421,12 @@ const STEPS = {
 const spinner = `<span class="ic thinking"><span class="spark"></span></span>`;
 
 // POST JSON and call onEvent for each newline-delimited JSON event in the response.
-async function streamEvents(url, body, onEvent) {
+async function streamEvents(url, body, onEvent, signal) {
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal,
   });
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
@@ -535,6 +575,9 @@ function runHireEvents() {
           $('[data-act="dl"]', card).addEventListener("click", () => downloadMd(text, name));
         } else if (e.name === "create_onboarding_plan") {
           renderChecklist($(".tcard-body", card), e.data.items);
+          const md = `# Onboarding checklist · ${e.data.country}\n\n` + e.data.items.map((it) => `- [ ] **${it.when}** · ${it.task} _(${it.owner})_`).join("\n");
+          $(".tcard-head", card).insertAdjacentHTML("beforeend", `<span class="actions"><button class="btn btn-ghost btn-sm" data-act="copy">Copy checklist</button></span>`);
+          $('[data-act="copy"]', card).addEventListener("click", async () => { await navigator.clipboard.writeText(md); toast("Checklist copied"); });
         }
         break;
       case "tool_error":
@@ -552,19 +595,30 @@ function runHireEvents() {
           note.classList.replace("note", "summary");
           $(".label", note).textContent = "Hiring summary";
           setStep("summary", "done");
+          $(".tcard-head", note).insertAdjacentHTML("beforeend", `<span class="actions"><button class="btn btn-ghost btn-sm" data-act="share">Copy share link</button></span>`);
+          $('[data-act="share"]', note).addEventListener("click", () => copyLink(hireLink(hire.prompt)));
         }
         break;
     }
   };
 }
 
+const hireLink = (q) => `${location.origin}${location.pathname}#hire?${new URLSearchParams({ q })}`;
+
+async function copyLink(url) {
+  try { await navigator.clipboard.writeText(url); toast("Share link copied"); }
+  catch { prompt("Copy this link:", url); }
+}
+
 async function runHire(text) {
   text = text.trim();
   if (text.length < 3 || hire.busy) return;
   hire.busy = true;
+  hire.prompt = text;
+  hire.ctrl = new AbortController();
   const go = $("#hire-go");
-  go.disabled = true;
-  go.textContent = "Working…";
+  go.textContent = "■ Stop";
+  go.classList.replace("btn-brand", "btn-ghost");
   $("#hire-timeline").innerHTML = "";
   $("#hire-pipeline").hidden = false;
   $$("#hire-pipeline [data-step]").forEach((s) => (s.className = ""));
@@ -573,19 +627,26 @@ async function runHire(text) {
   tick();
   hire.timer = setInterval(tick, 1000);
   try {
-    await streamEvents("/api/hire", { prompt: text }, runHireEvents());
+    await streamEvents("/api/hire", { prompt: text }, runHireEvents(), hire.ctrl.signal);
   } catch (err) {
-    addCard("error", `<span class="ic">!</span><span class="label">Couldn't reach the agent (${escapeHtml(err.message)}).</span>`);
+    if (err.name === "AbortError") addCard("error", `<span class="ic">■</span><span class="label">Stopped.</span>`);
+    else addCard("error", `<span class="ic">!</span><span class="label">Couldn't reach the agent (${escapeHtml(err.message)}).</span>`);
+    $$(".tcard.running").forEach((c) => c.classList.replace("running", "error"));
+    $$(".tcard.error .thinking").forEach((sp) => (sp.outerHTML = `<span class="ic">!</span>`));
   } finally {
     clearInterval(hire.timer);
     tick();
     hire.busy = false;
-    go.disabled = false;
     go.textContent = "Run agent";
+    go.classList.replace("btn-ghost", "btn-brand");
   }
 }
 
-$("#hire-form").addEventListener("submit", (e) => { e.preventDefault(); runHire($("#hire-input").value); });
+$("#hire-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (hire.busy) return hire.ctrl.abort();
+  runHire($("#hire-input").value);
+});
 $("#hire-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); runHire($("#hire-input").value); }
 });

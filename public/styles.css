@@ -105,7 +105,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn:disabled { opacity: .55; cursor: not-allowed; transform: none; }
 
 /* ---------- Hero ---------- */
-.hero { position: relative; padding: 88px 0 40px; text-align: center; overflow: hidden; }
+.hero { position: relative; padding: 64px 0 28px; text-align: center; overflow: hidden; }
 .hero::before {
   content: ""; position: absolute; inset: -40% -10% auto; height: 720px; z-index: -1;
   background:
@@ -132,7 +132,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .hero p.lede { font-size: clamp(16px, 2vw, 19px); color: var(--ink-2); max-width: 640px; margin: 0 auto 30px; }
 .hero-ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 .hero-ctas .btn { padding: 13px 22px; font-size: 15px; }
-.trust { margin-top: 44px; display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; color: var(--ink-3); font-size: 13px; }
+.trust { margin-top: 32px; display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; color: var(--ink-3); font-size: 13px; }
 .trust strong { display: block; font-family: var(--display); font-size: 26px; color: var(--ink); letter-spacing: -.02em; }
 
 /* ---------- Workspace ---------- */
@@ -307,6 +307,9 @@ img.flag { width: auto; border-radius: 3px; box-shadow: 0 0 0 1px var(--line); v
 .risk.medium { background: var(--warn-soft); color: var(--warn); }
 .risk.high { background: var(--bad-soft); color: var(--bad); }
 .ccard .note { font-size: 12px; color: var(--ink-3); }
+.card-actions { display: flex; gap: 6px; margin-top: auto; padding-top: 4px; }
+.card-actions .btn { flex: 1; }
+.msg-copy { margin-top: 8px; }
 .brief { border: 1px solid var(--line); border-radius: 14px; background: var(--bg); padding: 20px 22px; }
 .brief-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-weight: 600; }
 .disclaimer { font-size: 12px; color: var(--ink-3); }
@@ -396,6 +399,7 @@ footer .container { display: flex; justify-content: space-between; gap: 16px; fl
   .checklist li { grid-template-columns: auto 1fr; row-gap: 2px; }
   .checklist li > :not(input) { grid-column: 2; justify-self: start; }
   .hire-box { flex-direction: column; align-items: stretch; }
+  .hire-box textarea { min-height: 84px; }
 }
 
 /* ---------- Responsive ---------- */
@@ -413,8 +417,19 @@ footer .container { display: flex; justify-content: space-between; gap: 16px; fl
   .brand { font-size: 15px; }
   .suggestions { grid-template-columns: 1fr; }
   .app-bar .status, .dots { display: none; }
-  .hero { padding-top: 56px; }
-  .trust { gap: 24px; }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  .tab { justify-content: center; padding: 8px 6px; font-size: 13px; }
+  .hero { padding: 40px 0 16px; }
+  .hero h1 { margin: 16px auto 12px; }
+  .hero p.lede { margin-bottom: 20px; }
+  .hero-ctas .btn:not(.btn-brand) { display: none; }
+  .trust { margin-top: 24px; display: grid; grid-template-columns: repeat(4, auto); gap: 12px; font-size: 11px; }
+  .trust strong { font-size: 20px; }
+  .workspace { padding-top: 8px; }
+  .hire { padding: 20px 14px 28px; }
+  .tcard { padding: 14px; }
+  .tcard-head .actions { margin-left: 0; width: 100%; }
+  .tcard .paper { padding: 14px; }
   .row2 { grid-template-columns: 1fr; }
   .side, .main { padding: 18px 16px; }
   .app-bar { padding: 10px; }
