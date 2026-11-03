@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import sys
@@ -55,6 +56,93 @@ compliance data computed by the platform; rely on it and do not invent different
 Keep it under 450 words."""
 
 
+HIRE_PROMPT = BASE_PROMPT + """
+
+You are running the one-prompt hire workflow. The user describes a hire in plain language and you take
+it from "where should we hire?" to "ready to onboard" using your tools, in this order:
+1. Call `compare_countries` with every candidate country (pick 2-4 sensible ones if the user named none,
+   or a region). Convert the salary to USD if needed and say so. Default the EOR fee to 500 USD/month.
+2. Pick the best-fit country using the tool data (cost, notice, misclassification risk), not memory.
+3. Call `draft_contract` for that country. Use "contractor" only if the user explicitly asked for one.
+4. Call `create_onboarding_plan` with a concrete checklist for that country (documents, payroll and tax
+   registration, benefits, equipment, statutory items), each with a timing relative to the start date.
+Then write a short final summary (under 200 words, Markdown): the decision and why in two sentences, a
+one-line cost figure, the top 3 compliance watch-outs, and what the user should do next. Do not repeat
+the contract or the checklist; the user already sees them. If the request is not about hiring, say what
+the workflow does instead of calling tools."""
+
+CODES = [c["code"] for c in COUNTRIES]
+
+HIRE_TOOLS = [
+    {
+        "name": "compare_countries",
+        "description": ("Compare the indicative total annual employer cost and compliance profile of one hire across "
+                        "1-4 countries, using the platform's country data. Returns cost breakdown, paid leave, notice, "
+                        "probation and contractor-misclassification risk per country."),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "country_codes": {"type": "array", "items": {"type": "string", "enum": CODES},
+                                  "description": "ISO country codes to compare (1-4)."},
+                "salary_usd": {"type": "number", "description": "Base annual salary in USD."},
+                "eor_fee_monthly_usd": {"type": "number", "description": "EOR fee per month in USD."},
+            },
+            "required": ["country_codes", "salary_usd", "eor_fee_monthly_usd"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "draft_contract",
+        "description": ("Draft a first-draft employment or contractor agreement for the chosen country. The draft is "
+                        "shown to the user directly; you receive a short confirmation."),
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "country_code": {"type": "string", "enum": CODES},
+                "worker_type": {"type": "string", "enum": ["employee", "contractor"]},
+                "role": {"type": "string"},
+                "salary": {"type": "string", "description": "Salary as it should appear in the contract, with currency."},
+                "start_date": {"type": "string", "description": "Start date, or empty if unknown."},
+                "special_terms": {"type": "string", "description": "Remote work, equity, etc. Empty if none."},
+            },
+            "required": ["country_code", "worker_type", "role", "salary", "start_date", "special_terms"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "create_onboarding_plan",
+        "description": "Save the onboarding checklist for the hire. It is shown to the user as an interactive checklist.",
+        "strict": True,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "country_code": {"type": "string", "enum": CODES},
+                "items": {
+                    "type": "array",
+                    "description": "6-12 checklist items in chronological order.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "when": {"type": "string", "description": "Timing, e.g. 'Week -3', 'Day 1', 'First 90 days'."},
+                            "task": {"type": "string"},
+                            "owner": {"type": "string", "enum": ["Employer", "EOR", "Employee"]},
+                        },
+                        "required": ["when", "task", "owner"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["country_code", "items"],
+            "additionalProperties": False,
+        },
+    },
+]
+
+MAX_AGENT_TURNS = 8
+
+
 class Message(BaseModel):
     role: Literal["user", "assistant"]
     content: str = Field(min_length=1, max_length=MAX_CHARS)
@@ -81,14 +169,21 @@ class BriefRequest(BaseModel):
     role: str = Field(default="", max_length=120)
 
 
+class HireRequest(BaseModel):
+    prompt: str = Field(min_length=3, max_length=2000)
+
+
+NO_KEY_MESSAGE = ("⚠️ The server has no Anthropic API key. Set `ANTHROPIC_API_KEY` in your environment "
+                  "(on Vercel: Project → Settings → Environment Variables), then redeploy.")
+
+
 def api_key_configured() -> bool:
     return bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"))
 
 
 async def stream_claude(system: str, messages: list[dict], effort: str):
     if not api_key_configured():
-        yield ("⚠️ The server has no Anthropic API key. Set `ANTHROPIC_API_KEY` in your environment "
-               "(on Vercel: Project → Settings → Environment Variables), then redeploy.")
+        yield NO_KEY_MESSAGE
         return
     try:
         async with client.beta.messages.stream(
@@ -107,17 +202,21 @@ async def stream_claude(system: str, messages: list[dict], effort: str):
                 yield "\n\n_I can't help with that request. Try rephrasing it as an HR or employment question._"
             elif final.stop_reason == "max_tokens":
                 yield "\n\n_(Response truncated.)_"
-    except anthropic.AuthenticationError:
-        yield "⚠️ The server's Anthropic API key is missing or invalid. Set `ANTHROPIC_API_KEY`."
-    except anthropic.RateLimitError:
-        yield "⚠️ Too many requests right now. Please try again in a minute."
-    except anthropic.APIStatusError as e:
-        yield f"⚠️ The AI service returned an error ({e.status_code}). Please try again."
-    except anthropic.APIConnectionError:
-        yield "⚠️ Could not reach the AI service. Please try again."
-    except Exception:
-        logging.exception("Unexpected error while streaming from Claude")
-        yield "⚠️ Something went wrong on the server. Please try again."
+    except Exception as e:
+        yield error_message(e)
+
+
+def error_message(e: Exception) -> str:
+    if isinstance(e, anthropic.AuthenticationError):
+        return "⚠️ The server's Anthropic API key is missing or invalid. Set `ANTHROPIC_API_KEY`."
+    if isinstance(e, anthropic.RateLimitError):
+        return "⚠️ Too many requests right now. Please try again in a minute."
+    if isinstance(e, anthropic.APIStatusError):
+        return f"⚠️ The AI service returned an error ({e.status_code}). Please try again."
+    if isinstance(e, anthropic.APIConnectionError):
+        return "⚠️ Could not reach the AI service. Please try again."
+    logging.exception("Unexpected error while streaming from Claude")
+    return "⚠️ Something went wrong on the server. Please try again."
 
 
 def text_stream(gen) -> StreamingResponse:
@@ -159,6 +258,117 @@ async def brief(req: BriefRequest):
     prompt = (f"Hire: {role}, base salary ${req.salary_usd:,.0f} USD/year, EOR fee ${req.eor_fee:,.0f}/month.\n"
               f"Countries under consideration:\n" + "\n".join(rows))
     return text_stream(stream_claude(BRIEF_PROMPT, [{"role": "user", "content": prompt}], effort="medium"))
+
+
+def ndjson(**fields) -> str:
+    return json.dumps(fields, ensure_ascii=False) + "\n"
+
+
+def compare_rows(codes: list[str], salary_usd: float, eor_fee: float) -> list[dict]:
+    keys = ("code", "name", "currency", "employer_rate", "extra_months", "pto_days", "notice", "probation",
+            "misclass_risk", "notes")
+    return [{**{k: BY_CODE[code][k] for k in keys}, **estimate_cost(BY_CODE[code], salary_usd, eor_fee)}
+            for code in codes]
+
+
+async def run_tool(tool):
+    """Execute one tool call. Yields UI events, then a final ("result", content) tuple for Claude."""
+    inp = tool.input
+    if tool.name == "compare_countries":
+        codes = list(dict.fromkeys(c for c in inp["country_codes"] if c in BY_CODE))[:4]
+        if not codes or not inp["salary_usd"] > 0:
+            raise ValueError("Give 1-4 known country codes and a positive salary.")
+        fee = max(0, inp["eor_fee_monthly_usd"])
+        rows = compare_rows(codes, inp["salary_usd"], fee)
+        yield ndjson(t="tool_result", id=tool.id, name=tool.name,
+                     data={"rows": rows, "salary_usd": inp["salary_usd"], "eor_fee": fee})
+        yield ("result", json.dumps(rows))
+
+    elif tool.name == "draft_contract":
+        country = BY_CODE[inp["country_code"]]["name"]
+        details = {"country": country, "worker_type": inp["worker_type"], "role": inp["role"], "salary": inp["salary"],
+                   "start_date": inp["start_date"], "notes": inp["special_terms"]}
+        prompt = "Draft the agreement using these details:\n" + "\n".join(
+            f"- {k.replace('_', ' ').title()}: {v}" for k, v in details.items() if v)
+        text = ""
+        async for chunk in stream_claude(CONTRACT_PROMPT, [{"role": "user", "content": prompt}], effort="low"):
+            text += chunk
+            yield ndjson(t="contract_delta", id=tool.id, d=chunk)
+        if text.startswith("⚠️"):
+            raise ValueError(text)
+        yield ndjson(t="tool_result", id=tool.id, name=tool.name,
+                     data={"country": country, "worker_type": inp["worker_type"], "role": inp["role"]})
+        yield ("result", f"Drafted the {inp['worker_type']} agreement for {country} ({len(text.split())} words, "
+                         f"{text.count('[REVIEW]')} clauses marked [REVIEW]). It is shown to the user.")
+
+    elif tool.name == "create_onboarding_plan":
+        country = BY_CODE[inp["country_code"]]["name"]
+        yield ndjson(t="tool_result", id=tool.id, name=tool.name, data={"country": country, "items": inp["items"]})
+        yield ("result", f"Saved a {len(inp['items'])}-item onboarding checklist for {country}. It is shown to the user.")
+
+    else:
+        raise ValueError(f"Unknown tool {tool.name}")
+
+
+async def run_hire(prompt: str):
+    if not api_key_configured():
+        yield ndjson(t="error", msg=NO_KEY_MESSAGE)
+        return
+    messages = [{"role": "user", "content": prompt}]
+    try:
+        for _ in range(MAX_AGENT_TURNS):
+            async with client.beta.messages.stream(
+                model=MODEL,
+                max_tokens=16000,
+                system=HIRE_PROMPT,
+                tools=HIRE_TOOLS,
+                messages=messages,
+                output_config={"effort": "low"},
+                betas=["server-side-fallback-2026-07-01"],
+                fallbacks="default",
+            ) as stream:
+                async for ev in stream:
+                    if ev.type == "content_block_start" and ev.content_block.type == "tool_use":
+                        yield ndjson(t="tool_start", id=ev.content_block.id, name=ev.content_block.name)
+                    elif ev.type == "content_block_delta" and ev.delta.type == "text_delta":
+                        yield ndjson(t="text", d=ev.delta.text)
+                final = await stream.get_final_message()
+
+            if final.stop_reason == "refusal":
+                yield ndjson(t="error", msg="I can't help with that request. Try describing a hire instead.")
+                return
+            if final.stop_reason == "max_tokens":
+                yield ndjson(t="text", d="\n\n_(Response truncated.)_")
+                break
+            tool_uses = [b for b in final.content if b.type == "tool_use"]
+            if not tool_uses:
+                break
+
+            messages.append({"role": "assistant", "content": final.content})
+            results = []
+            for tool in tool_uses:
+                yield ndjson(t="tool_call", id=tool.id, name=tool.name, input=tool.input)
+                result = {"type": "tool_result", "tool_use_id": tool.id}
+                try:
+                    async for item in run_tool(tool):
+                        if isinstance(item, tuple):
+                            result["content"] = item[1]
+                        else:
+                            yield item
+                except (KeyError, TypeError, ValueError) as e:
+                    result.update(content=f"Error: {e}", is_error=True)
+                    yield ndjson(t="tool_error", id=tool.id, name=tool.name, msg=str(e))
+                results.append(result)
+            messages.append({"role": "user", "content": results})
+        yield ndjson(t="done")
+    except Exception as e:
+        yield ndjson(t="error", msg=error_message(e))
+
+
+@app.post("/api/hire")
+async def hire(req: HireRequest):
+    return StreamingResponse(run_hire(req.prompt), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.get("/api/countries")

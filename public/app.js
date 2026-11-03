@@ -206,14 +206,7 @@ $("#contract-copy").addEventListener("click", async () => {
   toast("Draft copied to clipboard");
 });
 
-$("#contract-download").addEventListener("click", () => {
-  const blob = new Blob([contract.text], { type: "text/markdown" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `${$("#contract-title").textContent.replace(/[^\w]+/g, "-").toLowerCase()}.md`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-});
+$("#contract-download").addEventListener("click", () => downloadMd(contract.text, $("#contract-title").textContent));
 
 // ---------- Hiring Planner ----------
 const planner = { countries: ["GB", "DE", "PT", "BR"], salary: 90000, fee: 500, role: "" };
@@ -379,6 +372,228 @@ $("#p-brief").addEventListener("click", async () => {
   }
 });
 
+// ---------- One-prompt hire ----------
+const hire = { busy: false, contract: "", started: 0, timer: 0 };
+const STEPS = {
+  compare_countries: { running: "Comparing countries", done: "Countries compared" },
+  draft_contract: { running: "Drafting the contract", done: "Contract drafted" },
+  create_onboarding_plan: { running: "Building the onboarding plan", done: "Onboarding plan ready" },
+};
+const spinner = `<span class="ic thinking"><span class="spark"></span></span>`;
+
+// POST JSON and call onEvent for each newline-delimited JSON event in the response.
+async function streamEvents(url, body, onEvent) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try { const j = await res.json(); detail = typeof j.detail === "string" ? j.detail : detail; } catch {}
+    throw new Error(detail);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, i);
+      buf = buf.slice(i + 1);
+      if (line.trim()) onEvent(JSON.parse(line));
+    }
+  }
+}
+
+function setStep(step, state) {
+  const el = $(`#hire-pipeline [data-step="${step}"]`);
+  if (el) el.className = state;
+}
+
+function addCard(cls, head) {
+  const card = document.createElement("article");
+  card.className = `tcard ${cls}`;
+  card.innerHTML = `<div class="tcard-head">${head}</div><div class="tcard-body"></div>`;
+  $("#hire-timeline").appendChild(card);
+  return card;
+}
+
+function downloadMd(text, name) {
+  const blob = new Blob([text], { type: "text/markdown" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${name.replace(/[^\w]+/g, "-").toLowerCase()}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function renderMiniCompare(body, data) {
+  const min = Math.min(...data.rows.map((r) => r.total));
+  body.innerHTML = `<div class="mini-compare">${data.rows.map((r) => `
+    <div class="mini" data-code="${r.code}">
+      <div class="name">${flagImg(r, 18)} ${escapeHtml(r.name)}</div>
+      <div class="total">${usd(r.total)} <small>/ year</small></div>
+      <div class="meta"><span>Employer ~${(r.employer_rate * 100).toFixed(1)}%</span><span>${r.pto_days} days leave</span></div>
+      <div class="meta"><span>${r.total === min && data.rows.length > 1 ? "Lowest cost" : `+${usd(r.total - min)}`}</span><span class="risk ${r.misclass_risk}">${r.misclass_risk} risk</span></div>
+    </div>`).join("")}</div>`;
+}
+
+function renderChecklist(body, items) {
+  body.innerHTML = `<ul class="checklist">${items.map((it) => `
+    <li><input type="checkbox" aria-label="Done" /><span class="when">${escapeHtml(it.when)}</span><span class="task">${escapeHtml(it.task)}</span><span class="owner ${escapeHtml(it.owner)}">${escapeHtml(it.owner)}</span></li>`).join("")}</ul>`;
+  body.addEventListener("change", (e) => e.target.closest("li")?.classList.toggle("checked", e.target.checked));
+}
+
+function runHireEvents() {
+  const cards = {};
+  let note = null;
+  let noteText = "";
+  let contractFrame = 0;
+
+  const finishCard = (card, label) => {
+    card.classList.remove("running");
+    card.classList.add("done");
+    $(".ic", card).outerHTML = `<span class="ic">✓</span>`;
+    $(".label", card).textContent = label;
+  };
+
+  return (e) => {
+    const card = cards[e.id];
+    switch (e.t) {
+      case "text": {
+        if (!note) {
+          if ($('#hire-pipeline [data-step="create_onboarding_plan"]').className === "done") setStep("summary", "active");
+          note = addCard("note", `<span class="ic">✦</span><span class="label">Agent</span>`);
+          noteText = "";
+        }
+        noteText += e.d;
+        renderMarkdown($(".tcard-body", note), noteText);
+        break;
+      }
+      case "tool_start":
+        note = null;
+        cards[e.id] = addCard("running", `${spinner}<span class="label">${STEPS[e.name]?.running || e.name}…</span><span class="sub"></span>`);
+        setStep(e.name, "active");
+        break;
+      case "tool_call": {
+        if (!card) break;
+        const sub = $(".sub", card);
+        const i = e.input;
+        if (e.name === "compare_countries") {
+          sub.textContent = `${i.country_codes.map((c) => BY_CODE[c]?.name || c).join(" vs. ")} · ${usd(i.salary_usd)} base`;
+        } else if (e.name === "draft_contract") {
+          sub.textContent = `${i.worker_type === "contractor" ? "Contractor" : "Employment"} agreement · ${BY_CODE[i.country_code]?.name || i.country_code}`;
+          $$(".mini.chosen").forEach((m) => m.classList.remove("chosen"));
+          const mini = $(`.mini[data-code="${i.country_code}"]`);
+          if (mini) {
+            mini.classList.add("chosen");
+            mini.insertAdjacentHTML("afterbegin", `<span class="badge-best">Recommended</span>`);
+          }
+          hire.contract = "";
+          hire.contractName = `${sub.textContent} ${i.role}`;
+          $(".tcard-body", card).innerHTML = `<div class="paper"><div class="md">${thinkingHtml("Researching local requirements")}</div></div>`;
+        } else if (e.name === "create_onboarding_plan") {
+          sub.textContent = BY_CODE[i.country_code]?.name || "";
+        }
+        break;
+      }
+      case "contract_delta":
+        hire.contract += e.d;
+        if (!contractFrame) {
+          contractFrame = requestAnimationFrame(() => {
+            contractFrame = 0;
+            const md = $(".paper .md", card);
+            if (md) renderMarkdown(md, hire.contract);
+          });
+        }
+        break;
+      case "tool_result":
+        if (!card) break;
+        finishCard(card, STEPS[e.name]?.done || e.name);
+        setStep(e.name, "done");
+        if (e.name === "compare_countries") {
+          renderMiniCompare($(".tcard-body", card), e.data);
+          $(".tcard-head", card).insertAdjacentHTML("beforeend", `<span class="actions"><button class="btn btn-ghost btn-sm" data-act="planner">Open in Planner</button></span>`);
+          $('[data-act="planner"]', card).addEventListener("click", () => {
+            Object.assign(planner, { countries: e.data.rows.map((r) => r.code), salary: Math.round(e.data.salary_usd), fee: e.data.eor_fee });
+            updatePlanner({ syncInputs: true });
+            selectTab("planner", true);
+            history.replaceState(null, "", plannerHash());
+          });
+        } else if (e.name === "draft_contract") {
+          cancelAnimationFrame(contractFrame);
+          contractFrame = 0;
+          renderMarkdown($(".paper .md", card), hire.contract);
+          $(".tcard-head", card).insertAdjacentHTML("beforeend", `<span class="actions"><button class="btn btn-ghost btn-sm" data-act="copy">Copy</button><button class="btn btn-ghost btn-sm" data-act="dl">Download .md</button></span>`);
+          const text = hire.contract;
+          const name = hire.contractName;
+          $('[data-act="copy"]', card).addEventListener("click", async () => { await navigator.clipboard.writeText(text); toast("Contract copied to clipboard"); });
+          $('[data-act="dl"]', card).addEventListener("click", () => downloadMd(text, name));
+        } else if (e.name === "create_onboarding_plan") {
+          renderChecklist($(".tcard-body", card), e.data.items);
+        }
+        break;
+      case "tool_error":
+        if (!card) break;
+        card.classList.replace("running", "error");
+        $(".ic", card).outerHTML = `<span class="ic">!</span>`;
+        $(".tcard-body", card).innerHTML = `<p>⚠️ ${escapeHtml(e.msg)}</p>`;
+        setStep(e.name, "");
+        break;
+      case "error":
+        addCard("error", `<span class="ic">!</span><span class="label">${escapeHtml(e.msg)}</span>`);
+        break;
+      case "done":
+        if (note && note === $("#hire-timeline").lastElementChild) {
+          note.classList.replace("note", "summary");
+          $(".label", note).textContent = "Hiring summary";
+          setStep("summary", "done");
+        }
+        break;
+    }
+  };
+}
+
+async function runHire(text) {
+  text = text.trim();
+  if (text.length < 3 || hire.busy) return;
+  hire.busy = true;
+  const go = $("#hire-go");
+  go.disabled = true;
+  go.textContent = "Working…";
+  $("#hire-timeline").innerHTML = "";
+  $("#hire-pipeline").hidden = false;
+  $$("#hire-pipeline [data-step]").forEach((s) => (s.className = ""));
+  hire.started = Date.now();
+  const tick = () => ($("#hire-timer").textContent = `${Math.round((Date.now() - hire.started) / 1000)}s`);
+  tick();
+  hire.timer = setInterval(tick, 1000);
+  try {
+    await streamEvents("/api/hire", { prompt: text }, runHireEvents());
+  } catch (err) {
+    addCard("error", `<span class="ic">!</span><span class="label">Couldn't reach the agent (${escapeHtml(err.message)}).</span>`);
+  } finally {
+    clearInterval(hire.timer);
+    tick();
+    hire.busy = false;
+    go.disabled = false;
+    go.textContent = "Run agent";
+  }
+}
+
+$("#hire-form").addEventListener("submit", (e) => { e.preventDefault(); runHire($("#hire-input").value); });
+$("#hire-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); runHire($("#hire-input").value); }
+});
+$$(".example").forEach((b) => b.addEventListener("click", () => {
+  $("#hire-input").value = b.dataset.q;
+  runHire(b.dataset.q);
+}));
+
 // ---------- Boot ----------
 async function boot() {
   fetch("/api/health")
@@ -405,8 +620,14 @@ async function boot() {
   readPlannerHash();
   updatePlanner({ syncInputs: true });
 
-  const tab = location.hash.slice(1).split("?")[0];
-  if (["agent", "contract", "planner"].includes(tab)) selectTab(tab, true);
+  const [tab, query] = location.hash.slice(1).split("?");
+  if (["hire", "agent", "contract", "planner"].includes(tab)) selectTab(tab, true);
+  // #hire?q=... pre-fills the prompt and runs it, so a demo link or QR code starts the agent directly.
+  const q = tab === "hire" && new URLSearchParams(query || "").get("q");
+  if (q) {
+    $("#hire-input").value = q;
+    runHire(q);
+  }
 }
 
 boot();

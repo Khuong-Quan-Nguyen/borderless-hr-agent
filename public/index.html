@@ -22,6 +22,7 @@
       Borderless HR Agent
     </a>
     <div class="nav-links">
+      <a href="#hire" data-goto="hire">One-prompt hire</a>
       <a href="#agent" data-goto="agent">HR Agent</a>
       <a href="#contract" data-goto="contract">Contracts</a>
       <a href="#planner" data-goto="planner">Hiring Planner</a>
@@ -34,16 +35,17 @@
 <header class="hero">
   <div class="hero-grid"></div>
   <div class="container">
-    <a href="#planner" data-goto="planner" class="pill"><b>New</b> Global Hiring Planner — compare true hiring cost in seconds →</a>
+    <a href="#hire" data-goto="hire" class="pill"><b>New</b> One-prompt hire — from "where?" to a contract and onboarding plan →</a>
     <h1>Hire anyone, anywhere.<br /><span class="grad">Your AI HR agent knows the rules.</span></h1>
     <p class="lede">Ask about employment law in any country, draft compliant contracts in minutes, and see what a hire really costs before you make the offer.</p>
     <div class="hero-ctas">
-      <a href="#agent" data-goto="agent" class="btn btn-brand">Ask the HR Agent</a>
+      <a href="#hire" data-goto="hire" class="btn btn-brand">Try one-prompt hire</a>
+      <a href="#agent" data-goto="agent" class="btn btn-ghost">Ask the HR Agent</a>
       <a href="#planner" data-goto="planner" class="btn btn-ghost">Plan a global hire</a>
     </div>
     <div class="trust">
       <div><strong id="stat-countries">24</strong>countries modeled</div>
-      <div><strong>3</strong>AI workflows</div>
+      <div><strong>4</strong>AI workflows</div>
       <div><strong>&lt;1 min</strong>to a hiring brief</div>
       <div><strong>Free</strong>no sign-up</div>
     </div>
@@ -56,7 +58,11 @@
       <div class="app-bar">
         <div class="dots"><i></i><i></i><i></i></div>
         <div class="tabs" role="tablist">
-          <button class="tab" role="tab" data-tab="agent" aria-selected="true">
+          <button class="tab" role="tab" data-tab="hire" aria-selected="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>
+            One-prompt hire <span class="new">New</span>
+          </button>
+          <button class="tab" role="tab" data-tab="agent" aria-selected="false">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             HR Agent
           </button>
@@ -66,14 +72,41 @@
           </button>
           <button class="tab" role="tab" data-tab="planner" aria-selected="false">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>
-            Hiring Planner <span class="new">New</span>
+            Hiring Planner
           </button>
         </div>
         <div class="status" id="status"><span class="led"></span><span id="status-text">Connecting…</span></div>
       </div>
 
+      <!-- One-prompt hire -->
+      <section class="panel active" id="panel-hire" role="tabpanel">
+        <div class="hire">
+          <div class="hire-head">
+            <h2>Describe the hire. The agent does the rest.</h2>
+            <p>It compares countries with live cost data, picks one, drafts the contract and builds the onboarding plan.</p>
+            <form class="composer-box hire-box" id="hire-form">
+              <textarea id="hire-input" rows="2" maxlength="2000" placeholder="e.g. Hire a senior backend engineer in Portugal or Poland, ~$80k, starting January, fully remote"></textarea>
+              <button class="btn btn-brand" type="submit" id="hire-go">Run agent</button>
+            </form>
+            <div class="examples">
+              <button type="button" class="example" data-q="Hire a senior backend engineer in Portugal or Poland, budget around $80k, start January 5 2027, fully remote">Backend engineer · Portugal or Poland</button>
+              <button type="button" class="example" data-q="We need a product designer in Latin America for about $60k a year. Compare Brazil, Mexico and Colombia and start them on February 1 2027.">Product designer · Latin America</button>
+              <button type="button" class="example" data-q="Hire a sales lead in Germany or the UK on €95,000, with a company car allowance, starting March 2027">Sales lead · Germany or UK</button>
+            </div>
+          </div>
+          <div class="pipeline" id="hire-pipeline" hidden>
+            <span data-step="compare_countries">Compare countries</span>
+            <span data-step="draft_contract">Draft contract</span>
+            <span data-step="create_onboarding_plan">Onboarding plan</span>
+            <span data-step="summary">Summary</span>
+            <b id="hire-timer"></b>
+          </div>
+          <div class="timeline" id="hire-timeline"></div>
+        </div>
+      </section>
+
       <!-- HR Agent -->
-      <section class="panel active" id="panel-agent" role="tabpanel">
+      <section class="panel" id="panel-agent" role="tabpanel">
         <div class="chat">
           <div class="chat-scroll" id="chat-scroll">
             <div class="welcome" id="welcome">
@@ -197,7 +230,8 @@
     <div class="eyebrow">How it works</div>
     <h2>From "can we hire there?" to a signed offer.</h2>
     <p class="intro">One agent covers the questions HR, finance and founders ask every time they hire across a border.</p>
-    <div class="steps">
+    <div class="steps steps-4">
+      <div class="step"><h3>Describe the hire</h3><p>One sentence in. The agent compares countries, picks one, drafts the contract and builds the onboarding checklist.</p></div>
       <div class="step"><h3>Plan the hire</h3><p>Compare employer cost, paid leave, notice and misclassification risk across countries — then share the link with finance.</p></div>
       <div class="step"><h3>Ask anything</h3><p>The HR Agent answers employment-law, payroll, benefits and visa questions with country-specific detail and flags what needs counsel.</p></div>
       <div class="step"><h3>Draft the contract</h3><p>Generate a first draft with local clauses — probation, leave, notice, IP — and review markers for your lawyer.</p></div>

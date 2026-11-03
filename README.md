@@ -8,9 +8,10 @@ An AI HR agent for global teams, built with FastAPI and Claude. It's inspired by
 
 | | What it does |
 |---|---|
+| ⚡ **One-prompt hire** *(new)* | Describe a hire in one sentence. A Claude tool-use agent compares candidate countries using the Planner's cost data, picks one, drafts the contract and builds an onboarding checklist. Each step streams into a live timeline. A link like `/#hire?q=…` runs the agent automatically. |
 | 💬 **HR Agent** | Multi-turn chat for employment law, payroll, benefits, visas, contractor misclassification and EOR-vs-entity questions. Responses stream in and are rendered as Markdown. |
 | 📄 **Contract drafting** | Produces a first-draft employment or contractor agreement for a chosen country, including local clauses (probation, leave, notice, IP), `[REVIEW]` markers for counsel and placeholders for missing details. You can copy it or download it as Markdown. |
-| 🌍 **Global Hiring Planner** *(new feature)* | Compares the **true annual cost** of a hire in up to 4 countries: gross pay including mandatory extra months, employer contributions and EOR fees. Each country also shows paid leave, notice, probation and contractor-misclassification risk. It can generate an **AI hiring brief** with a recommendation, and every plan is a **shareable link**. |
+| 🌍 **Global Hiring Planner** | Compares the **true annual cost** of a hire in up to 4 countries: gross pay including mandatory extra months, employer contributions and EOR fees. Each country also shows paid leave, notice, probation and contractor-misclassification risk. It can generate an **AI hiring brief** with a recommendation, and every plan is a **shareable link**. |
 
 ### Why the Hiring Planner?
 
@@ -19,6 +20,18 @@ Borderless already grows through free tools: HRGPT, and a free agent the CEO com
 - **Captures high-intent buyers.** Someone comparing employer costs in Germany and Brazil is about to make a hire.
 - **Spreads by sharing.** Plans are links, so HR sends them to finance and the hiring manager, and new stakeholders see the product.
 - **Hands off to the product.** The AI brief ends with next steps (EOR vs. contractor vs. entity), which leads naturally into onboarding.
+
+### How the one-prompt hire agent works
+
+`POST /api/hire` runs a manual tool-use loop with Claude, and the response streams back as newline-delimited JSON events. Claude has three tools:
+
+| Tool | What the server does |
+|---|---|
+| `compare_countries` | Runs the same cost formula as the Planner (`api/countries.py`), so the recommendation is based on the data rather than the model's memory |
+| `draft_contract` | Makes a nested Claude call with the contract prompt and streams the draft to the UI. Claude only gets back a short confirmation, which keeps its context small |
+| `create_onboarding_plan` | Takes a structured checklist (`when`, `task`, `owner`) from Claude and renders it as interactive checkboxes |
+
+All three tools use `strict: true`, so their inputs always match the schema.
 
 ## Tech stack
 
@@ -33,7 +46,7 @@ Borderless already grows through free tools: HRGPT, and a free agent the CEO com
 
 ```
 ├── api/
-│   ├── index.py        # FastAPI app: /api/chat, /api/contract, /api/brief, /api/countries, /api/health
+│   ├── index.py        # FastAPI app: /api/hire (agent), /api/chat, /api/contract, /api/brief, /api/countries, /api/health
 │   └── countries.py    # Indicative cost/compliance data for 24 countries + cost formula
 ├── public/
 │   ├── index.html      # Landing page + app (HR Agent · Contracts · Hiring Planner)
@@ -96,6 +109,7 @@ Stop the server with `Ctrl + C`. Next time, you only need to run step 2's `activ
 
 ### 5. Try the demo
 
+1. **One-prompt hire tab.** Click an example, such as *Backend engineer · Portugal or Poland*, or describe your own hire. Watch the agent go through four steps: it compares countries (the recommended one is highlighted), streams the contract draft, builds the onboarding checklist and writes a summary. A full run takes about 90 seconds.
 1. **HR Agent tab.** Click a suggestion card, such as *Hire in Germany*, or ask your own question, for example *"What's the notice period for firing someone in France after 2 years?"* Follow-up questions keep the conversation context.
 2. **Contracts tab.** Choose *Employee*, pick a country (for example Portugal), enter a job title and salary, then click **Generate draft**. Clauses that need a lawyer's check are marked **[REVIEW]**. Use **Copy** or **Download .md** to export the draft.
 3. **Hiring Planner tab.** This is the new feature.
