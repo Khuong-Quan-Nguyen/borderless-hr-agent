@@ -244,6 +244,9 @@ def error_message(e: Exception) -> str:
         return "⚠️ The server's Anthropic API key is missing or invalid. Set `ANTHROPIC_API_KEY`."
     if isinstance(e, anthropic.RateLimitError):
         return "⚠️ Too many requests right now. Please try again in a minute."
+    if isinstance(e, anthropic.BadRequestError):
+        logging.error("Claude API rejected the request: %s", e.message)
+        return f"⚠️ The AI service rejected the request: {e.message[:300]}"
     if isinstance(e, anthropic.APIStatusError):
         return f"⚠️ The AI service returned an error ({e.status_code}). Please try again."
     if isinstance(e, anthropic.APIConnectionError):
